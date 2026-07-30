@@ -1,0 +1,15 @@
+[Unit]
+Description=odoo-runbot-local — Run Odoo branches locally from runbot
+Wants=postgresql.service
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+ExecStart=%h/.odoo-runbot-local/venv/bin/python %h/.odoo-runbot-local/server.py
+Restart=always
+RestartSec=5
+StandardOutput=append:%h/.odoo-runbot-local/logs/server.log
+StandardError=append:%h/.odoo-runbot-local/logs/server.log
+
+[Install]
+WantedBy=default.target

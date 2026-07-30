@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Odoo Runbot Local",
+  "version": "1.0",
+  "description": "Run Odoo branches locally from runbot with one click",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:8765/*",
+    "https://runbot.odoo.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://runbot.odoo.com/runbot/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Runbot Local",
+    "default_popup": "popup.html"
+  }
+}
