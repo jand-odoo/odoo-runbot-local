@@ -4,7 +4,7 @@ One-click tool to run any Odoo branch from [runbot.odoo.com](https://runbot.odoo
 
 A Chrome extension adds a "Run locally" button on runbot bundle pages. Clicking it checks out the exact commits from the latest build, creates a fresh database, and starts Odoo on `http://localhost:8072` — all automatically.
 
-<video src="demo.mp4" width="100%" controls></video>
+[<video src="demo.mp4" width="100%" controls></video>](https://github.com/user-attachments/assets/7b7b24ef-eb1d-420a-b617-9bb8f06f1176)
 
 ## Requirements
 
