@@ -198,12 +198,20 @@ def ensure_commit(repo_path, commit):
         return True
     logger.info(f"Fetching {commit} in {repo_path}")
     for remote in get_remotes(repo_path):
+        # Try fetching by commit hash directly — GitHub supports this
+        ok, _, _ = run_git(repo_path, 'fetch', '--no-tags', remote, f'{commit}:refs/remotes/{remote}/__fetch__')
+        if ok:
+            run_git(repo_path, 'update-ref', '-d', f'refs/remotes/{remote}/__fetch__')
+            ok, _, _ = run_git(repo_path, 'cat-file', '-e', commit)
+            if ok:
+                return True
+        # Fallback: fetch all refs
         ok, _, _ = run_git(repo_path, 'fetch', remote)
         if ok:
             ok, _, _ = run_git(repo_path, 'cat-file', '-e', commit)
             if ok:
                 return True
-    # Shallow clones (--depth 1) need --unshallow to reach old commits
+    # Last resort for shallow clones
     ok, _, _ = run_git(repo_path, 'fetch', '--unshallow')
     if ok:
         ok, _, _ = run_git(repo_path, 'cat-file', '-e', commit)
