@@ -8,6 +8,7 @@ import subprocess
 import logging
 import re
 import shutil
+import fcntl
 from pathlib import Path
 import psycopg2
 from flask import Flask, request, jsonify
@@ -69,20 +70,33 @@ def write_running(data):
         json.dump(data, f, indent=2)
 
 
+_lock_fd = None
+
+
 def acquire_lock():
-    if os.path.exists(LOCK_FILE):
+    global _lock_fd
+    try:
+        _lock_fd = open(LOCK_FILE, 'w')
+        fcntl.flock(_lock_fd.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        _lock_fd.write(str(os.getpid()))
+        _lock_fd.flush()
+        return True
+    except OSError:
+        if _lock_fd:
+            _lock_fd.close()
+            _lock_fd = None
         return False
-    with open(LOCK_FILE, 'w') as f:
-        f.write(str(os.getpid()))
-    return True
 
 
 def release_lock():
-    try:
-        if os.path.exists(LOCK_FILE):
-            os.remove(LOCK_FILE)
-    except Exception:
-        pass
+    global _lock_fd
+    if _lock_fd:
+        try:
+            fcntl.flock(_lock_fd.fileno(), fcntl.LOCK_UN)
+        except OSError:
+            pass
+        _lock_fd.close()
+        _lock_fd = None
 
 
 def kill_process_on_port(port):
