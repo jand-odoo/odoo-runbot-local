@@ -193,7 +193,7 @@ def run_git(repo_path, *args):
         result = subprocess.run(
             ['git'] + list(args),
             cwd=repo_path,
-            capture_output=True, text=True, timeout=120,
+            capture_output=True, text=True, timeout=300,
         )
         if result.returncode != 0:
             logger.error(f"git {' '.join(args)} in {repo_path}: {result.stderr.strip()}")

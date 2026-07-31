@@ -214,7 +214,7 @@ else
     info "PO mode: cloning repos"
     if [ ! -d "$CHECKOUT_DIR/odoo/.git" ]; then
         info "Cloning odoo/odoo..."
-        git clone --depth 1 git@github.com:odoo/odoo.git "$CHECKOUT_DIR/odoo" 2>&1 | tail -5
+        git clone git@github.com:odoo/odoo.git "$CHECKOUT_DIR/odoo" 2>&1 | tail -5
         ok "odoo/odoo cloned"
     else
         ok "odoo already cloned"
@@ -222,7 +222,7 @@ else
 
     if [ ! -d "$CHECKOUT_DIR/enterprise/.git" ]; then
         info "Cloning odoo/enterprise..."
-        git clone --depth 1 git@github.com:odoo/enterprise.git "$CHECKOUT_DIR/enterprise" 2>&1 | tail -5
+        git clone git@github.com:odoo/enterprise.git "$CHECKOUT_DIR/enterprise" 2>&1 | tail -5
         ok "odoo/enterprise cloned"
     else
         ok "enterprise already cloned"
