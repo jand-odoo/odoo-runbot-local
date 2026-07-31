@@ -1,4 +1,4 @@
-const SERVER_URL = 'http://localhost:8765';
+const SERVER_URL = 'http://127.0.0.1:8765';
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'checkout') {

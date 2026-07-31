@@ -4,8 +4,6 @@ One-click tool to run any Odoo branch from [runbot.odoo.com](https://runbot.odoo
 
 A Chrome extension adds a "Run locally" button on runbot bundle pages. Clicking it checks out the exact commits from the latest build, creates a fresh database, and starts Odoo on `http://localhost:8072` — all automatically.
 
-[<video src="demo.mp4" width="100%" controls></video>](https://github.com/user-attachments/assets/7b7b24ef-eb1d-420a-b617-9bb8f06f1176)
-
 ## Requirements
 
 - Ubuntu / Debian (or any Linux with systemd)
@@ -39,12 +37,18 @@ After setup completes, the server runs on `http://localhost:8765`.
 
 ## Usage
 
-### 1. Install the Chrome extension
+### 1. Install the browser extension
 
+**Chrome:**
 - Open `chrome://extensions`
 - Enable **Developer mode** (top right)
 - Click **Load unpacked**
-- Select `~/.odoo-runbot-local/extension/`
+- Select `~/.odoo-runbot-local/extension/chrome/`
+
+**Firefox:**
+- Open `about:debugging#/runtime/this-firefox`
+- Click **Load Temporary Add-on**
+- Select `~/.odoo-runbot-local/extension/firefox/manifest.json`
 
 ### 2. Run a branch
 
@@ -102,7 +106,8 @@ After setup completes, the server runs on `http://localhost:8765`.
 | `~/.odoo-runbot-local/logs/server.log` | Server logs |
 | `~/.odoo-runbot-local/logs/odoo-8072.log` | Odoo stdout/stderr |
 | `~/.odoo-runbot-local/running.json` | Current instance state |
-| `~/.odoo-runbot-local/extension/` | Live Chrome extension |
+| `~/.odoo-runbot-local/extension/chrome/` | Chrome extension files |
+| `~/.odoo-runbot-local/extension/firefox/` | Firefox extension files |
 | `~/.config/systemd/user/odoo-runbot-local.service` | systemd unit |
 | `~/odoo/repositories/localdev/odoo-runbot-local/` | Checkout location (odoo/ + enterprise/) |
 

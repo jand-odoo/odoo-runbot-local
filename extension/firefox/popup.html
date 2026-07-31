@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { width: 250px; padding: 12px; font-family: -apple-system, sans-serif; font-size: 13px; }
+    h2 { margin: 0 0 8px; font-size: 15px; color: #875a7b; }
+    p { margin: 4px 0; color: #555; }
+    .status { padding: 6px; border-radius: 4px; margin: 8px 0; font-size: 12px; }
+    .ok { background: #dff0d8; color: #3c763d; }
+    .err { background: #f2dede; color: #a94442; }
+    .loading { background: #d9edf7; color: #31708f; }
+    a { color: #875a7b; }
+  </style>
+</head>
+<body>
+  <h2>Runbot Local</h2>
+  <div id="status" class="status loading">Checking server...</div>
+  <p id="detail"></p>
+  <p><a href="https://runbot.odoo.com" target="_blank">Open runbot</a></p>
+  <script>
+    chrome.runtime.sendMessage({ action: 'status' }, (data) => {
+      const el = document.getElementById('status');
+      const detail = document.getElementById('detail');
+      if (data._reachable === false) {
+        el.className = 'status err';
+        el.textContent = '● Server unreachable';
+        detail.textContent = 'Is the server running? Restart via desktop icon or setup.sh';
+      } else if (data.running && data.alive) {
+        el.className = 'status ok';
+        el.textContent = '● Running';
+        const mins = Math.floor(data.uptime_seconds / 60);
+        detail.textContent = `Branch: ${data.branch} | DB: ${data.db_name} | Uptime: ${mins}m`;
+      } else {
+        el.className = 'status';
+        el.textContent = '○ Idle';
+        detail.textContent = 'Click "Run locally" on a runbot batch page';
+      }
+    });
+  </script>
+</body>
+</html>
