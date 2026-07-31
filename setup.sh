@@ -318,8 +318,8 @@ EXT_CHROME="$APP_DIR/extension/chrome"
 EXT_FIREFOX="$APP_DIR/extension/firefox"
 
 rm -rf "$EXT_CHROME" "$EXT_FIREFOX"
-cp -r "$EXT_SRC/chrome" "$EXT_CHROME"
-cp -r "$EXT_SRC/firefox" "$EXT_FIREFOX"
+[ -d "$EXT_SRC/chrome" ] && cp -r "$EXT_SRC/chrome" "$EXT_CHROME" || warn "Chrome extension source not found"
+[ -d "$EXT_SRC/firefox" ] && cp -r "$EXT_SRC/firefox" "$EXT_FIREFOX" || warn "Firefox extension source not found"
 
 ok "Extensions ready at $APP_DIR/extension/{chrome,firefox}/"
 

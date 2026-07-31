@@ -203,6 +203,12 @@ def ensure_commit(repo_path, commit):
             ok, _, _ = run_git(repo_path, 'cat-file', '-e', commit)
             if ok:
                 return True
+    # Shallow clones (--depth 1) need --unshallow to reach old commits
+    ok, _, _ = run_git(repo_path, 'fetch', '--unshallow')
+    if ok:
+        ok, _, _ = run_git(repo_path, 'cat-file', '-e', commit)
+        if ok:
+            return True
     return False
 
 

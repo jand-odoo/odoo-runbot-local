@@ -67,8 +67,8 @@ fi
 info "Updating extension..."
 EXT_DEST="$APP_DIR/extension"
 rm -rf "$EXT_DEST/chrome" "$EXT_DEST/firefox"
-cp -r "$REPO_DIR/extension/chrome" "$EXT_DEST/chrome"
-cp -r "$REPO_DIR/extension/firefox" "$EXT_DEST/firefox"
+[ -d "$REPO_DIR/extension/chrome" ] && cp -r "$REPO_DIR/extension/chrome" "$EXT_DEST/chrome" || warn "Chrome extension not found in repo"
+[ -d "$REPO_DIR/extension/firefox" ] && cp -r "$REPO_DIR/extension/firefox" "$EXT_DEST/firefox" || warn "Firefox extension not found in repo"
 ok "Extension files updated"
 
 # Step 5: Update setup/kill scripts
