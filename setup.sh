@@ -269,7 +269,8 @@ mkdir -p "$APP_DIR"
 cat > "$APP_DIR/config.json" <<EOF
 {
   "checkout_path": "$CHECKOUT_DIR",
-  "python": "$VENV_DIR/bin/python"
+  "python": "$VENV_DIR/bin/python",
+  "repo_path": "$SCRIPT_DIR"
 }
 EOF
 ok "Config written to $APP_DIR/config.json"
@@ -282,7 +283,8 @@ mkdir -p "$HOME/.config/systemd/user"
 
 cp "$SERVER_PY" "$APP_DIR/server.py"
 cp "$SCRIPT_DIR/killport.sh" "$APP_DIR/killport.sh"
-chmod +x "$APP_DIR/killport.sh"
+cp "$SCRIPT_DIR/update.sh" "$APP_DIR/update.sh"
+chmod +x "$APP_DIR/killport.sh" "$APP_DIR/update.sh"
 
 sed "s|%h|$HOME|g" "$SERVICE_FILE" > "$HOME/.config/systemd/user/$APP_NAME.service"
 
