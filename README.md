@@ -46,9 +46,8 @@ After setup completes, the server runs on `http://localhost:8765`.
 - Select `~/.odoo-runbot-local/extension/chrome/`
 
 **Firefox:**
-- Open `about:debugging#/runtime/this-firefox`
-- Click **Load Temporary Add-on**
-- Select `~/.odoo-runbot-local/extension/firefox/manifest.json`
+- Download the signed `.xpi` from `releases/odoo-runbot-local-1.0.xpi`
+- Open the file in Firefox — it installs permanently
 
 ### 2. Run a branch
 
