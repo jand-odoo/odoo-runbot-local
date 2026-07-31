@@ -1,0 +1,12 @@
+# odoo-runbot-local — log rotation
+# Install: sudo cp this file to /etc/logrotate.d/odoo-runbot-local
+
+/home/odoo/.odoo-runbot-local/logs/*.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

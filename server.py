@@ -19,6 +19,7 @@ LOG_DIR = os.path.join(APP_DIR, 'logs')
 PID_FILE = os.path.join(APP_DIR, 'pid')
 RUNNING_FILE = os.path.join(APP_DIR, 'running.json')
 CONFIG_FILE = os.path.join(APP_DIR, 'config.json')
+LOCK_FILE = os.path.join(APP_DIR, 'checkout.lock')
 ODOO_PORT = 8072
 SERVER_HOST = '127.0.0.1'
 SERVER_PORT = 8765
@@ -68,6 +69,22 @@ def write_running(data):
         json.dump(data, f, indent=2)
 
 
+def acquire_lock():
+    if os.path.exists(LOCK_FILE):
+        return False
+    with open(LOCK_FILE, 'w') as f:
+        f.write(str(os.getpid()))
+    return True
+
+
+def release_lock():
+    try:
+        if os.path.exists(LOCK_FILE):
+            os.remove(LOCK_FILE)
+    except Exception:
+        pass
+
+
 def kill_process_on_port(port):
     try:
         result = subprocess.run(
@@ -98,10 +115,21 @@ def kill_process_group(pid):
         pass
 
 
+def drop_running_database(running):
+    db_name = running.get('db_name')
+    if db_name:
+        try:
+            subprocess.run(['dropdb', '--if-exists', db_name], capture_output=True, timeout=30)
+            logger.info(f"Dropped database {db_name}")
+        except Exception as e:
+            logger.warning(f"Failed to drop database {db_name}: {e}")
+
+
 def kill_existing_instance():
     running = read_running()
     pid = running.get('pid')
     if pid:
+        drop_running_database(running)
         kill_process_group(pid)
         for _ in range(10):
             try:
@@ -214,76 +242,81 @@ def checkout():
     if not check_prerequisites():
         return jsonify({'error': 'Server not ready — check logs'}), 500
 
-    slug = slugify_branch(branch)
-    checkout_path = config['checkout_path']
-
-    for repo, commit in [('odoo', commit_odoo), ('enterprise', commit_enterprise)]:
-        repo_path = os.path.join(checkout_path, repo)
-        if not ensure_commit(repo_path, commit):
-            return jsonify({'error': f'Failed to fetch commit {commit} in {repo}'}), 500
-        ok, _, _ = run_git(repo_path, 'checkout', '-f', commit)
-        if not ok:
-            return jsonify({'error': f'Failed to checkout commit {commit} in {repo}'}), 500
-
-    kill_existing_instance()
+    if not acquire_lock():
+        return jsonify({'error': 'Checkout already in progress'}), 429
 
     try:
-        subprocess.run(['dropdb', '--if-exists', slug], capture_output=True, timeout=30)
-        subprocess.run(['createdb', slug], capture_output=True, timeout=30)
-    except Exception as e:
-        logger.error(f"Database error: {e}")
-        return jsonify({'error': f'Database setup failed: {e}'}), 500
+        slug = slugify_branch(branch)
+        checkout_path = config['checkout_path']
 
-    addons_paths = [
-        os.path.join(checkout_path, 'odoo', 'addons'),
-        os.path.join(checkout_path, 'odoo', 'odoo', 'addons'),
-        os.path.join(checkout_path, 'enterprise'),
-    ]
+        for repo, commit in [('odoo', commit_odoo), ('enterprise', commit_enterprise)]:
+            repo_path = os.path.join(checkout_path, repo)
+            if not ensure_commit(repo_path, commit):
+                return jsonify({'error': f'Failed to fetch commit {commit} in {repo}'}), 500
+            ok, _, _ = run_git(repo_path, 'checkout', '-f', commit)
+            if not ok:
+                return jsonify({'error': f'Failed to checkout commit {commit} in {repo}'}), 500
 
-    odoo_log = os.path.join(LOG_DIR, 'odoo-8072.log')
-    cmd = [
-        config['python'],
-        os.path.join(checkout_path, 'odoo', 'odoo-bin'),
-        '-d', slug,
-        '--db_user', os.environ.get('USER', 'odoo'),
-        '--http-port', str(ODOO_PORT),
-        '--http-interface', '127.0.0.1',
-        '--addons-path', ','.join(addons_paths),
-        '--logfile', odoo_log,
-        '--without-demo', 'all',
-    ]
+        kill_existing_instance()
 
-    if not is_db_initialized(slug):
-        cmd.extend(['-i', 'base'])
-        logger.info(f"Database {slug} not initialized, adding -i base")
+        try:
+            subprocess.run(['createdb', slug], capture_output=True, timeout=30)
+        except Exception as e:
+            logger.error(f"Database error: {e}")
+            return jsonify({'error': f'Database setup failed: {e}'}), 500
 
-    try:
-        odoo_log_handle = open(odoo_log, 'a')
-        proc = subprocess.Popen(
-            cmd,
-            stdout=odoo_log_handle,
-            stderr=subprocess.STDOUT,
-            preexec_fn=lambda: os.setpgid(0, 0),
-        )
-        odoo_log_handle.close()
-        running = {
-            'pid': proc.pid,
-            'branch': branch,
-            'db_name': slug,
-            'started_at': time.time(),
-            'odoo_commit': commit_odoo,
-            'enterprise_commit': commit_enterprise,
-        }
-        write_running(running)
-        logger.info(f"Started odoo (pid={proc.pid}) for {branch} on port {ODOO_PORT}")
-        return jsonify({
-            'url': f'http://localhost:{ODOO_PORT}',
-            'pid': proc.pid,
-            'db': slug,
-        })
-    except Exception as e:
-        logger.error(f"Failed to start odoo: {e}")
-        return jsonify({'error': f'Failed to start odoo: {e}'}), 500
+        addons_paths = [
+            os.path.join(checkout_path, 'odoo', 'addons'),
+            os.path.join(checkout_path, 'odoo', 'odoo', 'addons'),
+            os.path.join(checkout_path, 'enterprise'),
+        ]
+
+        odoo_log = os.path.join(LOG_DIR, 'odoo-8072.log')
+        cmd = [
+            config['python'],
+            os.path.join(checkout_path, 'odoo', 'odoo-bin'),
+            '-d', slug,
+            '--db_user', os.environ.get('USER', 'odoo'),
+            '--http-port', str(ODOO_PORT),
+            '--http-interface', '127.0.0.1',
+            '--addons-path', ','.join(addons_paths),
+            '--logfile', odoo_log,
+            '--without-demo', 'all',
+        ]
+
+        if not is_db_initialized(slug):
+            cmd.extend(['-i', 'base'])
+            logger.info(f"Database {slug} not initialized, adding -i base")
+
+        try:
+            odoo_log_handle = open(odoo_log, 'a')
+            proc = subprocess.Popen(
+                cmd,
+                stdout=odoo_log_handle,
+                stderr=subprocess.STDOUT,
+                preexec_fn=lambda: os.setpgid(0, 0),
+            )
+            odoo_log_handle.close()
+            running = {
+                'pid': proc.pid,
+                'branch': branch,
+                'db_name': slug,
+                'started_at': time.time(),
+                'odoo_commit': commit_odoo,
+                'enterprise_commit': commit_enterprise,
+            }
+            write_running(running)
+            logger.info(f"Started odoo (pid={proc.pid}) for {branch} on port {ODOO_PORT}")
+            return jsonify({
+                'url': f'http://localhost:{ODOO_PORT}',
+                'pid': proc.pid,
+                'db': slug,
+            })
+        except Exception as e:
+            logger.error(f"Failed to start odoo: {e}")
+            return jsonify({'error': f'Failed to start odoo: {e}'}), 500
+    finally:
+        release_lock()
 
 
 @app.route('/status', methods=['GET'])

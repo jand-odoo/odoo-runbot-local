@@ -1,6 +1,9 @@
 const COMMIT_LABEL_RE = /(odoo|enterprise):([a-f0-9]{7,40})/;
 const GITHUB_COMMIT_RE = /github\.com\/(?:odoo|odoo-dev)\/(odoo|enterprise)\/commit\/([a-f0-9]{7,40})/;
 
+let pollInterval = null;
+let isBusy = false;
+
 function showToast(message, isError = true) {
   const existing = document.getElementById('odoo-runbot-local-toast');
   if (existing) existing.remove();
@@ -63,6 +66,20 @@ function stopInstance() {
   });
 }
 
+function startPolling(h5BtnGroup, bundleName, fullBatchUrl) {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(() => {
+    if (!isBusy) updateButton(h5BtnGroup, bundleName, fullBatchUrl);
+  }, 15000);
+}
+
+function stopPolling() {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
+}
+
 async function updateButton(h5BtnGroup, bundleName, fullBatchUrl) {
   const existing = h5BtnGroup.querySelector('#odoo-runbot-local-btn');
   if (existing) existing.remove();
@@ -82,10 +99,12 @@ async function updateButton(h5BtnGroup, bundleName, fullBatchUrl) {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
+      isBusy = true;
       btn.innerHTML = '<i class="fa fa-stop"></i> Stopping...';
       btn.style.opacity = '0.6';
       const res = await stopInstance();
       showToast(res.status === 'stopped' ? 'Instance stopped' : 'Failed to stop', res.status !== 'stopped');
+      isBusy = false;
       updateButton(h5BtnGroup, bundleName, fullBatchUrl);
     });
   } else {
@@ -95,11 +114,13 @@ async function updateButton(h5BtnGroup, bundleName, fullBatchUrl) {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
+      isBusy = true;
       btn.innerHTML = '<i class="fa fa-play"></i> Fetching commits...';
       btn.style.opacity = '0.6';
       const { commitOdoo, commitEnterprise, error } = await fetchLatestBatchCommits(fullBatchUrl);
       if (!commitOdoo || !commitEnterprise) {
         showToast(error ? 'Fetch failed: ' + error : 'Could not find commits in latest batch', true);
+        isBusy = false;
         updateButton(h5BtnGroup, bundleName, fullBatchUrl);
         return;
       }
@@ -115,12 +136,14 @@ async function updateButton(h5BtnGroup, bundleName, fullBatchUrl) {
         } else {
           showToast(response?.error || 'Failed to start', true);
         }
+        isBusy = false;
         updateButton(h5BtnGroup, bundleName, fullBatchUrl);
       });
     });
   }
 
   h5BtnGroup.appendChild(btn);
+  startPolling(h5BtnGroup, bundleName, fullBatchUrl);
 }
 
 async function handleBundlePage() {
@@ -205,7 +228,10 @@ function init() {
   if (path.includes('/bundle/')) {
     handleBundlePage();
   } else if (!path.includes('/batch/')) {
+    stopPolling();
     processMainPage();
+  } else {
+    stopPolling();
   }
 }
 
