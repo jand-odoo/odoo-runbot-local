@@ -95,6 +95,20 @@ def checkout():
     if not instance.COMMIT_RE.match(commit_enterprise or ''):
         return jsonify({'error': 'Invalid enterprise commit'}), 400
 
+    extra_args = payload.get('extra_args') or []
+    if not isinstance(extra_args, list) or not all(isinstance(a, str) for a in extra_args):
+        return jsonify({'error': 'extra_args must be a list of strings'}), 400
+    rejected = instance.check_extra_args(extra_args)
+    if rejected:
+        return jsonify({'error': rejected}), 400
+
+    extra_addons = payload.get('extra_addons') or []
+    if not isinstance(extra_addons, list) or not all(isinstance(a, str) for a in extra_addons):
+        return jsonify({'error': 'extra_addons must be a list of strings'}), 400
+    rejected = instance.check_addons_paths(extra_addons)
+    if rejected:
+        return jsonify({'error': rejected}), 400
+
     # Deliberately excludes worktree state: a checkout is what repairs it.
     problems = instance.collect_problems(CONF, include_worktree_state=False)
     if problems:
@@ -105,7 +119,8 @@ def checkout():
         return jsonify({'error': 'A checkout is already in progress'}), 429
 
     try:
-        result = instance.checkout_and_start(CONF, branch, commit_odoo, commit_enterprise)
+        result = instance.checkout_and_start(
+            CONF, branch, commit_odoo, commit_enterprise, extra_args, extra_addons)
         return jsonify(result)
     except instance.StartError as exc:
         logger.error('%s: %s', exc.message, exc.detail)

@@ -67,6 +67,28 @@ orl run 18.0
 orl run master --dry-run   # show which commits it would use, and stop
 ```
 
+Anything after `--` goes straight to odoo-bin, which is how you install a module
+to test, update after a code change, or turn on asset reloading:
+
+```bash
+orl run master-feature-abc -- -i sale        # install a module on the new database
+orl run master-feature-abc -- -u account     # update modules after code changed
+orl run 18.0 -- --dev all                    # reload assets and XML without restarting
+```
+
+Flags the tool manages itself (`-d`, `--http-port`, `--addons-path`, `--logfile`)
+are refused, and it tells you the setting to use instead.
+
+To run modules from a repository this tool does not manage, add its directory:
+
+```bash
+orl run master --addons ~/odoo/repositories/odoo/design-themes
+orl config set extra_addons_paths ~/repos/design-themes,~/repos/my-addons
+```
+
+`--addons` applies to one run; the setting applies to all of them. The managed
+checkouts always come first, so an extra directory cannot shadow a core module.
+
 It needs a matching pair of odoo and enterprise commits, and works them out from the branch
 name:
 
@@ -129,6 +151,7 @@ orl config set odoo_port 8073     # change one
 | `odoo_port` | Port Odoo runs on (default 8072). Change it if it clashes with your own |
 | `checkout_path` | Where the odoo and enterprise repositories live (not this tool's folder) |
 | `db_user`, `db_host`, `db_port` | PostgreSQL connection |
+| `extra_addons_paths` | Extra addons directories, for repositories this tool does not manage |
 | `server_port` | The background service (default 8765). The extension expects this, so changing it breaks the button |
 
 ## Updating

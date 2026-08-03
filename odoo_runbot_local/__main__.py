@@ -34,9 +34,26 @@ def build_parser():
     return parser
 
 
+def split_passthrough(argv):
+    """Split argv at the first bare `--`, returning (ours, theirs).
+
+    Done before argparse sees it. argparse.REMAINDER looks like the obvious
+    tool but swallows any option that follows the positional, so
+    `run BRANCH --dry-run` would silently start Odoo instead of resolving.
+    """
+    if '--' not in argv:
+        return argv, []
+    index = argv.index('--')
+    return argv[:index], argv[index + 1:]
+
+
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    argv, passthrough = split_passthrough(argv)
+
     parser = build_parser()
     args = parser.parse_args(argv)
+    args.odoo_args = passthrough
 
     if not getattr(args, 'func', None):
         parser.print_help()

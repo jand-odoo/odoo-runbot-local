@@ -1,10 +1,11 @@
 """Run a branch locally by name, without needing runbot."""
+import argparse
 import threading
 import time
 
 from .. import client
 from .. import config as cfg
-from .. import resolve, ui
+from .. import instance, resolve, ui
 
 
 def _pick_branch(conf, fragment):
@@ -22,11 +23,15 @@ def _pick_branch(conf, fragment):
     return matches[labels.index(chosen)][0]
 
 
-def _describe(resolution):
+def _describe(resolution, odoo_args=(), extra_addons=()):
     print()
     ui.info(f'Branch: {resolution.branch}')
     for repo in cfg.REPOS:
         ui.info(f'  {repo:<11} {resolution.commits[repo][:12]}')
+    if odoo_args:
+        ui.info(f'  odoo-bin    {" ".join(odoo_args)}')
+    for path in extra_addons or ():
+        ui.info(f'  addons      {path}')
     for note in resolution.notes:
         ui.detail(note, indent='  ')
     if not resolution.exact:
@@ -52,6 +57,18 @@ def _follow_progress(conf, stop_event):
 
 def run(args):
     conf, problems = cfg.load()
+
+    odoo_args = list(getattr(args, 'odoo_args', None) or ())
+    rejected = instance.check_extra_args(odoo_args)
+    if rejected:
+        ui.err(rejected)
+        return 2
+
+    extra_addons = list(args.addons or ())
+    rejected = instance.check_addons_paths(extra_addons)
+    if rejected:
+        ui.err(rejected)
+        return 2
 
     branch = args.branch
     if not branch:
@@ -82,7 +99,7 @@ def run(args):
             ui.err(exc2.message)
             return 1
 
-    _describe(resolution)
+    _describe(resolution, odoo_args, extra_addons)
 
     if args.dry_run:
         print()
@@ -106,6 +123,8 @@ def run(args):
             'branch': resolution.branch,
             'commit_odoo': resolution.commits['odoo'],
             'commit_enterprise': resolution.commits['enterprise'],
+            'extra_args': odoo_args,
+            'extra_addons': extra_addons,
         })
     except client.ServerUnreachable as exc:
         stop_event.set()
@@ -137,5 +156,14 @@ def add_parser(subparsers):
     parser.add_argument('--enterprise-commit', help='override the enterprise commit')
     parser.add_argument('--dry-run', action='store_true',
                         help='resolve the commit pair and stop')
-    parser.set_defaults(func=run)
+    parser.add_argument('--addons', action='append', metavar='PATH',
+                        help='extra addons directory, repeatable. Use '
+                             '"config set extra_addons_paths" to make it permanent')
+    parser.epilog = (
+        'Anything after -- is passed straight to odoo-bin, for example:\n'
+        '  %(prog)s master-feature-abc -- -i sale --dev all\n'
+        '  %(prog)s 18.0 -- -u account --log-level=debug'
+    )
+    parser.formatter_class = argparse.RawDescriptionHelpFormatter
+    parser.set_defaults(func=run, odoo_args=[])
     return parser

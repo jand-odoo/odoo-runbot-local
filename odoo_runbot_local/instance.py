@@ -300,7 +300,52 @@ class StartError(Exception):
         self.status = status
 
 
-def checkout_and_start(conf, branch, commit_odoo, commit_enterprise):
+# Flags we set ourselves and depend on afterwards. Letting a caller override
+# them would leave the recorded port, database or log path pointing at the
+# wrong thing, so they are refused with a pointer to the right mechanism.
+RESERVED_ARGS = {
+    '-d': 'the database name comes from the branch',
+    '--database': 'the database name comes from the branch',
+    '--http-port': 'use: odoo-runbot-local config set odoo_port <port>',
+    '--http-interface': 'the server only binds 127.0.0.1',
+    '--addons-path': 'built from the checkout',
+    '--logfile': 'use: odoo-runbot-local logs odoo',
+    '--db_user': 'use: odoo-runbot-local config set db_user <user>',
+}
+
+
+def check_addons_paths(paths):
+    """Return an error for a directory that is not usable, else None.
+
+    Odoo silently ignores a non-existent addons directory, so a typo would
+    show up much later as a module that cannot be found."""
+    for path in paths or ():
+        resolved = os.path.abspath(os.path.expanduser(path))
+        if not os.path.isdir(resolved):
+            return f'Not a directory: {resolved}'
+    return None
+
+
+def check_extra_args(extra_args):
+    """Return an error message for arguments we cannot accept, else None."""
+    for arg in extra_args or ():
+        if '\0' in arg:
+            return 'Arguments may not contain null bytes'
+        name = arg.split('=', 1)[0]
+        if name in RESERVED_ARGS:
+            return f'{name} is managed by this tool: {RESERVED_ARGS[name]}'
+    return None
+
+
+def _installs_modules(extra_args):
+    for arg in extra_args or ():
+        if arg in ('-i', '--init') or arg.startswith(('-i=', '--init=')):
+            return True
+    return False
+
+
+def checkout_and_start(conf, branch, commit_odoo, commit_enterprise, extra_args=(),
+                       extra_addons=()):
     """Check out the commit pair and launch Odoo. Raises StartError on failure."""
     slug = slugify_branch(branch)
 
@@ -347,7 +392,7 @@ def checkout_and_start(conf, branch, commit_odoo, commit_enterprise):
         '--db_user', conf['db_user'],
         '--http-port', str(odoo_port),
         '--http-interface', '127.0.0.1',
-        '--addons-path', ','.join(cfg.addons_paths(conf)),
+        '--addons-path', ','.join(cfg.addons_paths(conf, extra_addons)),
         '--logfile', log_path,
         '--without-demo', 'all',
     ]
@@ -355,9 +400,16 @@ def checkout_and_start(conf, branch, commit_odoo, commit_enterprise):
         cmd += ['--db_host', str(conf['db_host'])]
     if conf.get('db_port'):
         cmd += ['--db_port', str(conf['db_port'])]
-    if not is_db_initialized(conf, slug):
+
+    # Our own -i base would fight a user-supplied -i, and odoo-bin takes the
+    # last one. Their modules pull base in as a dependency anyway.
+    if not is_db_initialized(conf, slug) and not _installs_modules(extra_args):
         cmd += ['-i', 'base']
         logger.info('Database %s is empty; installing base', slug)
+
+    if extra_args:
+        cmd += list(extra_args)
+        logger.info('Extra odoo-bin arguments: %s', ' '.join(extra_args))
 
     try:
         with open(log_path, 'a') as handle:
@@ -386,6 +438,7 @@ def checkout_and_start(conf, branch, commit_odoo, commit_enterprise):
         'odoo_commit': commit_odoo,
         'enterprise_commit': commit_enterprise,
         'port': odoo_port,
+        'extra_args': list(extra_args or ()),
     }
     write_running(running)
     logger.info('Started odoo pid=%s for %s on port %s', process.pid, branch, odoo_port)

@@ -70,6 +70,9 @@ def defaults():
         'db_host': None,
         'db_port': None,
         'allowed_origins': ['https://runbot.odoo.com'],
+        # Directories appended to the addons path, for repositories this tool
+        # does not manage: design-themes, iap-apps, your own addons.
+        'extra_addons_paths': [],
     }
 
 
@@ -183,13 +186,23 @@ def odoo_bin(config):
     return os.path.join(config['checkout_path'], 'odoo', 'odoo-bin')
 
 
-def addons_paths(config):
+def addons_paths(config, extra=()):
+    """The managed checkouts, then anything the user has added.
+
+    Order matters: Odoo takes the first match, so the managed repositories win
+    and an extra directory cannot silently shadow a core module.
+    """
     checkout = config['checkout_path']
-    return [
+    paths = [
         os.path.join(checkout, 'odoo', 'addons'),
         os.path.join(checkout, 'odoo', 'odoo', 'addons'),
         os.path.join(checkout, 'enterprise'),
     ]
+    for path in list(config.get('extra_addons_paths') or ()) + list(extra or ()):
+        resolved = os.path.abspath(os.path.expanduser(path))
+        if resolved not in paths:
+            paths.append(resolved)
+    return paths
 
 
 def server_log(config=None):
