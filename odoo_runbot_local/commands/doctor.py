@@ -78,7 +78,8 @@ def _check_config(report, conf, problems):
     else:
         report.ok(f'{cfg.CONFIG_FILE} parses, schema version {conf["version"]}')
 
-    for key in ('checkout_path', 'python', 'db_user', 'server_port', 'odoo_port'):
+    report.ok(f'checkout_path = {conf["checkout_path"]}  (odoo + enterprise repositories)')
+    for key in ('python', 'db_user', 'server_port', 'odoo_port'):
         report.ok(f'{key} = {conf[key]}')
 
     if not os.access(conf['python'], os.X_OK):
@@ -90,10 +91,12 @@ def _check_config(report, conf, problems):
     if not repo:
         report.note('repo_path is not recorded — run setup to set it')
     elif not os.path.exists(os.path.join(repo, 'odoo_runbot_local', 'server.py')):
-        report.fail(f'repo_path {repo} no longer holds the package — the service '
-                    f'cannot start. Re-run setup from the checkout you want to use.')
+        report.fail(f'repo_path {repo} no longer contains this tool — the service '
+                    f'cannot start.')
+        report.note('the folder you cloned was moved or deleted; run "bash setup.sh" '
+                    'from wherever it lives now', indent='  ')
     else:
-        report.ok(f'repo_path = {repo}')
+        report.ok(f'repo_path = {repo}  (this tool)')
 
 
 def _check_repos(report, conf, deep=True):
