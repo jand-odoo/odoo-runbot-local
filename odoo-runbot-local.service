@@ -5,7 +5,12 @@ After=network.target postgresql.service
 
 [Service]
 Type=simple
-ExecStart=%h/.odoo-runbot-local/venv/bin/python %h/.odoo-runbot-local/server.py
+# Runs from the repository checkout rather than a copy, so `update` is a git
+# pull plus a restart with nothing to synchronise. %REPO% is substituted at
+# install time, like %h.
+WorkingDirectory=%REPO%
+Environment=PYTHONPATH=%REPO%
+ExecStart=%h/.odoo-runbot-local/venv/bin/python -m odoo_runbot_local.server
 Restart=always
 RestartSec=5
 # The server rotates its own log file; the journal keeps startup crashes

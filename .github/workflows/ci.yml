@@ -6,33 +6,59 @@ on:
   pull_request:
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The CLI must run on the system interpreter before any virtualenv
+        # exists, so it has to work on the oldest Python we claim to support.
+        python-version: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: pip install --quiet pytest flask psycopg2-binary
+
+      - name: Run tests
+        # Git identity is needed: the resolution tests build real repositories.
+        run: |
+          git config --global user.email ci@example.com
+          git config --global user.name CI
+          python -m pytest tests/ -q
+
+      - name: CLI runs on a bare interpreter
+        # No third-party packages on the path — proves the bootstrap works.
+        run: |
+          python -c "import sys; sys.path.insert(0, '.'); \
+            from odoo_runbot_local.__main__ import build_parser; build_parser()"
+          ./bin/odoo-runbot-local --help > /dev/null
+          ./bin/odoo-runbot-local --version
+
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
-
-      - name: Lint shell scripts
-        run: shellcheck --severity=warning ./*.sh
-
-      - name: Check bash syntax
-        run: for f in ./*.sh; do bash -n "$f"; done
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
-
-      - name: Compile Python
-        run: python -m compileall -q server.py
+          python-version: '3.12'
 
       - name: Lint Python
         run: |
           pip install --quiet ruff
           # Pinned rule set so a new ruff release cannot turn CI red on its own.
-          ruff check --isolated --select E4,E7,E9,F server.py
+          ruff check --isolated --select E4,E7,E9,F odoo_runbot_local/ tests/
+
+      - name: Lint shell
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          shellcheck --severity=warning ./*.sh
+          bash -n setup.sh
 
       - name: Check extension JavaScript
         run: for f in extension/shared/*.js; do node --check "$f"; done
@@ -45,7 +71,8 @@ jobs:
 
       - name: Build extension
         run: |
-          bash build-extension.sh /tmp/ext
+          python -c "import sys; sys.path.insert(0, '.'); \
+            from odoo_runbot_local.commands.extension import build; build('/tmp/ext')"
           test -f /tmp/ext/chrome/popup.js
           test -f /tmp/ext/firefox/popup.js
           # MV3 blocks inline scripts: the popup must not contain one.
