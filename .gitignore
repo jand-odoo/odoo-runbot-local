@@ -7,3 +7,13 @@ venv/
 .DS_Store
 *.swp
 *.swo
+
+# Assembled by build-extension.sh
+build/
+
+# AMO signing credentials — must never be committed
+web-ext-config.mjs
+web-ext-config.cjs
+web-ext-config.js
+.web-ext-config.mjs
+

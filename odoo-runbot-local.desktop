@@ -2,8 +2,8 @@
 Version=1.0
 Type=Application
 Name=Runbot Local
-Comment=Run Odoo branches locally from runbot
-Exec=bash -c 'systemctl --user restart odoo-runbot-local && xdg-open http://localhost:8765/status 2>/dev/null'
+Comment=Restart the odoo-runbot-local server and show its health
+Exec=bash -c 'systemctl --user restart odoo-runbot-local && sleep 2 && xdg-open http://127.0.0.1:8765/health 2>/dev/null'
 Icon=utilities-terminal
 Terminal=false
 Categories=Development;Odoo;

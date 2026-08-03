@@ -8,8 +8,10 @@ Type=simple
 ExecStart=%h/.odoo-runbot-local/venv/bin/python %h/.odoo-runbot-local/server.py
 Restart=always
 RestartSec=5
-StandardOutput=append:%h/.odoo-runbot-local/logs/server.log
-StandardError=append:%h/.odoo-runbot-local/logs/server.log
+# The server rotates its own log file; the journal keeps startup crashes
+# visible without growing an unbounded file on disk.
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=default.target

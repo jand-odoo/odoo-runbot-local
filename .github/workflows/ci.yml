@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Lint shell scripts
+        run: shellcheck --severity=warning ./*.sh
+
+      - name: Check bash syntax
+        run: for f in ./*.sh; do bash -n "$f"; done
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Compile Python
+        run: python -m compileall -q server.py
+
+      - name: Lint Python
+        run: |
+          pip install --quiet ruff
+          # Pinned rule set so a new ruff release cannot turn CI red on its own.
+          ruff check --isolated --select E4,E7,E9,F server.py
+
+      - name: Check extension JavaScript
+        run: for f in extension/shared/*.js; do node --check "$f"; done
+
+      - name: Validate manifests
+        run: |
+          for f in extension/*/manifest.json; do
+            jq -e '.manifest_version and .name and .version' "$f" > /dev/null
+          done
+
+      - name: Build extension
+        run: |
+          bash build-extension.sh /tmp/ext
+          test -f /tmp/ext/chrome/popup.js
+          test -f /tmp/ext/firefox/popup.js
+          # MV3 blocks inline scripts: the popup must not contain one.
+          ! grep -q '<script>' /tmp/ext/chrome/popup.html

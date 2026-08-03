@@ -1,149 +1,185 @@
 # odoo-runbot-local
 
-One-click tool to run any Odoo branch from [runbot.odoo.com](https://runbot.odoo.com) locally on your machine.
+One-click tool to run any Odoo branch from [runbot.odoo.com](https://runbot.odoo.com) locally.
 
-A Chrome extension adds a "Run locally" button on runbot bundle pages. Clicking it checks out the exact commits from the latest build, creates a fresh database, and starts Odoo on `http://localhost:8072` — all automatically.
+A browser extension adds a **Run locally** button on runbot bundle pages. Clicking it checks out the
+exact commits from the latest batch, creates a fresh database, and starts Odoo on
+`http://127.0.0.1:8072` — all automatically.
 
 ## Requirements
 
-- Ubuntu / Debian (or any Linux with systemd)
-- PostgreSQL (`sudo apt install postgresql postgresql-client`)
-- Python 3.10+
-- Git
-- GitHub SSH key with access to `odoo/odoo` and `odoo/enterprise`
+- Linux with **systemd** (user services). Package installation is automated for
+  `apt`, `dnf`, `pacman` and `zypper`; on anything else setup tells you which binaries to install.
+- PostgreSQL, Python 3.10+, Git
+- An Odoo employee GitHub account with access to **`odoo/odoo`**, **`odoo/enterprise`** and
+  **`odoo-dev`** — setup verifies all four repositories before it does anything else
 
-## Quick Start
-
-Run the interactive setup script:
+## Quick start
 
 ```bash
+git clone git@github.com:jand-odoo/odoo-runbot-local.git
+cd odoo-runbot-local
 bash setup.sh
 ```
 
-It walks through 10 steps:
+Setup is **idempotent** — if a step fails, fix the cause and re-run; completed steps are detected and
+skipped. It prints a per-step ✓/✗ summary and **exits non-zero if anything failed**, so a green
+summary means it actually worked.
 
-1. **System packages** — installs PostgreSQL, Python, Git, etc.
-2. **PostgreSQL setup** — creates your user role and database
-3. **GitHub SSH** — generates a key and guides you through adding it to GitHub
-4. **Clone repos** — clones or creates worktrees of `odoo` and `enterprise`
-5. **Odoo dependencies** — runs `debinstall.sh` for system libs
-6. **Python venv** — creates a virtualenv and installs dependencies
-7. **Configuration** — writes `~/.odoo-runbot-local/config.json`
-8. **Systemd service** — installs and starts the local server
-9. **Desktop shortcut** — adds a launcher to restart the service
-10. **Chrome extension** — copies the extension files and shows install instructions
+```
+bash setup.sh --yes       # non-interactive, take every default
+bash setup.sh --doctor    # diagnose an existing install, change nothing
+bash setup.sh --help
+```
 
-After setup completes, the server runs on `http://localhost:8765`.
+Verbose output goes to `$TMPDIR/odoo-runbot-local-setup.log`.
+
+### Something not working?
+
+```bash
+bash doctor.sh
+```
+
+It checks tools, PostgreSQL, config validity, both repositories and their remotes' reachability,
+ports, the systemd unit, and the server's own `/health` report — then exits non-zero listing exactly
+what is broken. **Run this first** before reading any other troubleshooting.
+
+## Installing the extension
+
+Setup builds it into `~/.odoo-runbot-local/extension/`.
+
+**Chrome** — `chrome://extensions` → enable Developer mode → *Load unpacked* →
+`~/.odoo-runbot-local/extension/chrome/`
+
+**Firefox** — open the signed `releases/odoo-runbot-local-1.2.xpi`, or `about:addons` →
+gear icon → *Install Add-on From File*. This installs permanently.
+
+> For extension development, load the unsigned build instead:
+> `about:debugging#/runtime/this-firefox` → *Load Temporary Add-on* →
+> `~/.odoo-runbot-local/extension/firefox/manifest.json`. It is discarded when Firefox restarts.
+> Don't run both at once — two copies each inject their own button.
 
 ## Usage
 
-### 1. Install the browser extension
+1. Open any bundle page on `runbot.odoo.com`
+2. Click **Run locally** next to the bundle name — the button reports live progress
+   (`fetching odoo`, `creating database`, `starting odoo`)
+3. A tab opens at `http://127.0.0.1:8072`
+4. Click **Stop** on the same page, or use the extension popup, to stop Odoo and drop the database
 
-**Chrome:**
-- Open `chrome://extensions`
-- Enable **Developer mode** (top right)
-- Click **Load unpacked**
-- Select `~/.odoo-runbot-local/extension/chrome/`
+## Git access: SSH vs HTTPS
 
-**Firefox:**
-- Download the signed `.xpi` from `releases/odoo-runbot-local-1.0.xpi`
-- Open the file in Firefox — it installs permanently
+Both fetch identical content; only authentication and network reachability differ. Setup probes SSH
+first and falls back to HTTPS:
 
-### 2. Run a branch
+| | SSH | HTTPS |
+|---|---|---|
+| Credential | key registered on GitHub | credential helper, `gh auth login`, or a PAT |
+| Network | needs outbound **:22**, blocked on many corporate networks | plain `:443`, works nearly everywhere |
 
-- Go to any bundle page on `runbot.odoo.com/*/bundle/*`
-- Click **Run locally** (beside the bundle name at the top)
-- Wait — the server fetches commits, creates a DB, and starts Odoo
-- A new tab opens at `http://localhost:8072`
+`GIT_TERMINAL_PROMPT=0` is exported everywhere, so a missing credential fails immediately instead of
+hanging on an invisible prompt. If you already have Odoo repositories locally, setup offers to create
+worktrees from them and inherits their existing remote URLs.
 
-### 3. Stop the instance
+**`odoo-dev` remotes** are registered in both repositories (never fetched in full). Runbot bundles
+for development branches reference commits that only exist in `odoo-dev`, so without them those
+bundles cannot be resolved.
 
-- Go back to any bundle page — the button now shows **Stop** (red)
-- Click it to stop Odoo and drop the database
-- Or use the desktop shortcut to restart the server
+## Configuration
 
-### 4. Check status
+`~/.odoo-runbot-local/config.json` (schema version 2). Restart the service after editing:
+`systemctl --user restart odoo-runbot-local`
 
-- Click the extension icon (top right toolbar) to see what's running
+| Key | Purpose |
+|---|---|
+| `checkout_path` | Where `odoo/` and `enterprise/` live |
+| `mode` | `worktree` (from your existing repos) or `clone` |
+| `python` | Interpreter used to run `odoo-bin` |
+| `git_protocol` | `ssh` or `https` |
+| `server_port` | This server (default 8765). **Changing it requires editing the extension.** |
+| `odoo_port` | The Odoo instance (default 8072) — change this if 8072 collides with your own Odoo |
+| `db_user`, `db_host`, `db_port` | PostgreSQL connection; host/port `null` means a local socket |
+| `allowed_origins` | Origins permitted to call the mutating endpoints |
 
-## Architecture
+A missing key falls back to a built-in default, and malformed JSON is reported through `/health`
+rather than crash-looping the service.
 
-```
-┌──────────────────┐      ┌──────────────┐      ┌──────────────────┐
-│  Chrome Extension │      │  Flask Server │      │   Odoo Instance  │
-│                  │      │              │      │                  │
-│  content.js ─────┼──────┼→ /checkout   │──────┼→ git checkout    │
-│  (runbot page)   │      │  /status     │      │  createdb        │
-│                  │      │  /stop       │      │  odoo-bin        │
-│  background.js ──┼──────┼→ localhost:  │      │  localhost:8072  │
-│  (service worker)│      │  8765        │      │                  │
-│                  │      │              │      │                  │
-│  popup.html     │      │  systemd      │      │                  │
-└──────────────────┘      └──────────────┘      └──────────────────┘
-```
+Override the checkout location at setup time with `RUNBOT_LOCAL_CHECKOUT=/path bash setup.sh`.
 
-### Components
+## API
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/checkout` | POST | Fetch commits, create the DB, start Odoo |
+| `/stop` | POST | Stop the instance and drop its database |
+| `/status` | GET | Current instance state, including the in-flight `phase` |
+| `/health` | GET | `{"ok": bool, "problems": [...]}` — why checkouts would fail |
+
+`POST` bodies are JSON: `{"branch": "...", "commit_odoo": "...", "commit_enterprise": "..."}`.
+
+**Security.** The mutating endpoints require an `X-Runbot-Local: 1` header, and reject any request
+whose `Origin` is not `https://runbot.odoo.com` or a browser extension. A web page you visit cannot
+set a custom header on a simple request, and the preflight it would need is refused — so an arbitrary
+site can no longer drop your database, which it could in version 1.0.
+
+## Layout
 
 | Path | Purpose |
 |---|---|
-| `server.py` | Flask HTTP server (checkout, status, stop) |
-| `setup.sh` | Interactive 10-step onboarding |
-| `uninstall.sh` | Removes server, service, repos |
-| `killport.sh` | Helper to kill a process by port |
-| `odoo-runbot-local.service` | systemd user unit (auto-start, restart) |
-| `extension/content.js` | Injects buttons on runbot pages |
-| `extension/background.js` | Service worker — proxies requests to server |
-| `extension/popup.html` | Popup showing instance status |
+| `server.py` | Flask server (`/checkout`, `/stop`, `/status`, `/health`) |
+| `lib.sh` | Shared constants and helpers for all shell scripts |
+| `setup.sh` / `update.sh` / `uninstall.sh` | Install, upgrade, remove |
+| `doctor.sh` | Read-only diagnostics |
+| `build-extension.sh` | Assembles per-browser packages from `extension/shared/` |
+| `extension/shared/` | The extension's actual source — edit here |
+| `extension/{chrome,firefox}/manifest.json` | Per-browser manifests (MV3 / MV2) |
 
 ### Data locations
 
 | Path | Purpose |
 |---|---|
-| `~/.odoo-runbot-local/server.py` | Live copy of the server |
-| `~/.odoo-runbot-local/venv/` | Python virtualenv |
-| `~/.odoo-runbot-local/config.json` | Server config (python path, checkout path) |
-| `~/.odoo-runbot-local/logs/server.log` | Server logs |
-| `~/.odoo-runbot-local/logs/odoo-8072.log` | Odoo stdout/stderr |
-| `~/.odoo-runbot-local/running.json` | Current instance state |
-| `~/.odoo-runbot-local/extension/chrome/` | Chrome extension files |
-| `~/.odoo-runbot-local/extension/firefox/` | Firefox extension files |
+| `~/.odoo-runbot-local/` | Server, venv, config, logs, built extension |
+| `~/.odoo-runbot-local/logs/server.log` | Server log (self-rotating, 5 MB × 3) |
+| `~/.odoo-runbot-local/logs/odoo-8072.log` | Odoo output (rotated on each start) |
+| `~/.local/share/odoo-runbot-local/checkout/` | Default checkout location |
 | `~/.config/systemd/user/odoo-runbot-local.service` | systemd unit |
-| `~/odoo/repositories/localdev/odoo-runbot-local/` | Checkout location (odoo/ + enterprise/) |
 
-## API Endpoints
+## Releasing a signed Firefox extension
 
-### `GET /checkout?branch=<name>&commit_odoo=<hash>&commit_enterprise=<hash>`
+Firefox only installs signed add-ons permanently. To cut a release:
 
-Fetches commits, creates a fresh DB, starts Odoo. Kills any existing instance first.
+1. Bump `version` in **both** `extension/chrome/manifest.json` and
+   `extension/firefox/manifest.json` — AMO permanently rejects a version it has already signed.
+2. Put your AMO credentials in `~/.web-ext-config.mjs` (never in the repo):
 
-### `GET /status`
+   ```js
+   export default {
+     sign: { apiKey: 'user:12345678:901', apiSecret: '<secret>' },
+   };
+   ```
 
-Returns current instance state:
-```json
-{
-  "running": true,
-  "alive": true,
-  "pid": 1234,
-  "branch": "master-18.0-sale-fix",
-  "db_name": "master-18.0-sale-fix",
-  "odoo_commit": "6e58e88c",
-  "enterprise_commit": "51c03afe",
-  "uptime_seconds": 342
-}
+   Get them from <https://addons.mozilla.org/developers/addon/api/key/>. The secret is
+   shown only once.
+3. Sign:
+
+   ```bash
+   bash sign-extension.sh                    # unlisted (self-distribution)
+   bash sign-extension.sh --channel listed   # public AMO listing
+   ```
+
+The script rebuilds from `extension/shared/`, lints, uploads, verifies the result actually
+carries Mozilla's signature, and writes `releases/odoo-runbot-local-<version>.xpi`.
+
+Chrome is unaffected — it loads unpacked from `~/.odoo-runbot-local/extension/chrome/`.
+
+## Updating
+
+```bash
+bash update.sh
 ```
 
-### `GET /stop`
-
-Kills the running Odoo instance and cleans up.
-
-## Troubleshooting
-
-| Symptom | Likely cause |
-|---|---|
-| "Server unreachable" in popup | Server crashed. Restart: `systemctl --user restart odoo-runbot-local` or use the desktop shortcut |
-| Odoo shows 500 error | Check `~/.odoo-runbot-local/logs/odoo-8072.log` |
-| Button does nothing | Reload the extension in `chrome://extensions` |
-| Failed to fetch branch/commit | Check `~/.odoo-runbot-local/logs/server.log` for git errors |
+Pulls, reinstalls Python dependencies, migrates the config, re-renders the systemd unit, restarts and
+health-checks the server, and rebuilds the extension. Reload the extension in your browser afterwards.
 
 ## Uninstall
 
@@ -151,7 +187,9 @@ Kills the running Odoo instance and cleans up.
 bash uninstall.sh
 ```
 
-This removes the server, systemd service, logs, repos, and desktop shortcut. PostgreSQL, system packages, and the Chrome extension are left untouched.
+Removes the service, app data and desktop shortcut, and offers to remove the repositories. It stops
+only the Odoo process it started — never whatever else happens to be on the Odoo port. PostgreSQL,
+system packages and SSH keys are left alone.
 
 ## License
 
