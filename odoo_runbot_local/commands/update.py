@@ -8,7 +8,7 @@ import time
 import urllib.request
 
 from .. import config as cfg
-from .. import ui
+from .. import legacy, ui
 from ..platform import git, proc, systemd
 from . import extension
 
@@ -59,6 +59,25 @@ def run(args):
         ui.err('Failed to install server requirements.')
         return 1
     ui.ok('Dependencies up to date')
+
+    # ─── Retire earlier versions ─────────────────────────────
+    removed = legacy.clean_stale_files()
+    if removed:
+        ui.ok(f'Removed {len(removed)} leftover file(s) from the old shell install')
+        for path in removed:
+            ui.detail(os.path.basename(path))
+
+    found = legacy.legacy_dir()
+    if found:
+        path, size = found
+        ui.warn(f'An old install is still on disk: {path} ({legacy.human_size(size)})')
+        if ui.confirm('Remove it?', default=False):
+            if legacy.remove_legacy_dir():
+                ui.ok(f'Removed {path}')
+            else:
+                ui.warn(f'Could not fully remove {path}')
+        else:
+            ui.info('Left in place — nothing uses it.')
 
     # ─── Config migration ────────────────────────────────────
     ui.info('Checking configuration...')

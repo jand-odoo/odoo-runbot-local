@@ -4,7 +4,7 @@ import os
 import shutil
 
 from .. import config as cfg
-from .. import ui
+from .. import legacy, ui
 from ..platform import git, packages, postgres, proc, systemd
 from . import extension
 
@@ -419,12 +419,14 @@ class Setup:
         if systemd.exists('runbot-local'):
             ui.warn("Found a legacy 'runbot-local' service — disabling it.")
             systemd.disable('runbot-local', now=True)
-            legacy = os.path.join(cfg.HOME, '.config', 'systemd', 'user',
-                                  'runbot-local.service')
-            if os.path.exists(legacy):
-                os.remove(legacy)
-            ui.info(f'The old directory {cfg.HOME}/.runbot-local can be deleted '
-                    'once this works.')
+            if os.path.exists(legacy.LEGACY_UNIT):
+                os.remove(legacy.LEGACY_UNIT)
+
+        # Shell scripts copied here by earlier versions. The stale update.sh is
+        # actively harmful: it targets a layout that no longer exists.
+        removed = legacy.clean_stale_files()
+        if removed:
+            ui.ok(f'Removed {len(removed)} leftover file(s) from the old install')
 
         systemd.install_unit(
             os.path.join(cfg.REPO_ROOT, f'{cfg.APP_NAME}.service'),

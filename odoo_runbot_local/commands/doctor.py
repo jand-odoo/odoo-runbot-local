@@ -5,7 +5,7 @@ import urllib.error
 import urllib.request
 
 from .. import config as cfg
-from .. import ui
+from .. import legacy, ui
 from ..platform import git, ports, postgres, proc, systemd
 
 
@@ -195,6 +195,24 @@ def _check_service(report, conf):
         report.note('lingering disabled — the service stops when you log out')
 
 
+def _check_leftovers(report):
+    stale = legacy.stale_files()
+    found = legacy.legacy_dir()
+    if not stale and not found:
+        return
+
+    ui.heading('Leftovers from earlier versions')
+    if stale:
+        report.fail(f'{len(stale)} stale shell script(s) in {cfg.APP_DIR}')
+        for path in stale:
+            report.note(os.path.basename(path), indent='  ')
+        report.note(f'remove them: {cfg.APP_NAME} update', indent='  ')
+    if found:
+        path, size = found
+        report.note(f'{path} ({legacy.human_size(size)}) is unused — '
+                    f'"{cfg.APP_NAME} update" offers to remove it')
+
+
 def _check_health(report, conf):
     ui.heading('Server health')
     health = _http_json(f'http://127.0.0.1:{conf["server_port"]}/health')
@@ -221,6 +239,7 @@ def run(args):
     _check_repos(report, conf, deep=not args.offline)
     _check_ports(report, conf)
     _check_service(report, conf)
+    _check_leftovers(report)
     _check_health(report, conf)
 
     print()
