@@ -3,6 +3,7 @@ import os
 import re
 
 from . import proc
+from .. import config as cfg
 
 # Odoo branches are named <base>-<feature>-<initials>, e.g.
 # "master-l10n_cn-tax_report-jand" or "saas-18.4-fix-abc".
@@ -16,13 +17,24 @@ SSH_PROBE_OPTS = [
 
 
 def env():
-    """Git environment that fails fast instead of hanging on a credential prompt."""
+    """Git environment that fails fast instead of hanging on a credential prompt.
+
+    Uses this tool's own deploy key when one has been set up, so git
+    operations never depend on the user's personal ssh-agent being reachable
+    (it commonly isn't, from a lingering systemd user service).
+    """
     environment = dict(os.environ)
     environment['GIT_TERMINAL_PROMPT'] = '0'
-    environment.setdefault(
-        'GIT_SSH_COMMAND',
-        'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new',
-    )
+    if os.path.exists(cfg.SSH_KEY):
+        environment['GIT_SSH_COMMAND'] = (
+            f'ssh -i {cfg.SSH_KEY} -o IdentitiesOnly=yes '
+            '-o BatchMode=yes -o StrictHostKeyChecking=accept-new'
+        )
+    else:
+        environment.setdefault(
+            'GIT_SSH_COMMAND',
+            'ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new',
+        )
     return environment
 
 
@@ -36,14 +48,16 @@ def git_stream(repo, *args, timeout=3600):
 
 # ─── Connectivity ────────────────────────────────────────────
 
-def ssh_works():
+def ssh_works(key=None):
     """`ssh -T git@github.com` exits 1 even on success, so match the banner.
 
     The output must be captured before matching — piping into grep would make a
     shell's pipefail report failure for a perfectly good key.
     """
-    result = proc.run(
-        ['ssh', *SSH_PROBE_OPTS, '-T', 'git@github.com'], timeout=30)
+    opts = list(SSH_PROBE_OPTS)
+    if key:
+        opts += ['-i', key, '-o', 'IdentitiesOnly=yes']
+    result = proc.run(['ssh', *opts, '-T', 'git@github.com'], timeout=30)
     return 'successfully authenticated' in (result.stdout + result.stderr)
 
 
@@ -103,7 +117,7 @@ def fetch_commit(repo, commit):
         if result.ok and has_commit(repo, commit):
             return True, ''
         if result.stderr:
-            errors.append(f'{remote}: {result.last_error_line}')
+            errors.append(f'{remote}: {result.error_summary}')
 
         result = git(repo, 'fetch', '--no-tags', remote)
         if result.ok and has_commit(repo, commit):

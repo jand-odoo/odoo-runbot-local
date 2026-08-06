@@ -27,7 +27,7 @@ def args(valid_config):
 def test_github_failure_stops_setup(setup_mod, args, monkeypatch, capsys):
     """No access to enterprise must abort, not warn and continue."""
     from odoo_runbot_local.platform import git
-    monkeypatch.setattr(git, 'ssh_works', lambda: True)
+    monkeypatch.setattr(git, 'ssh_works', lambda key=None: True)
     monkeypatch.setattr(git, 'reachable', lambda url, timeout=60: 'enterprise' not in url)
 
     setup = setup_mod.Setup(args)

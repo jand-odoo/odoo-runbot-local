@@ -106,26 +106,26 @@ class Setup:
     def github_access(self):
         ui.step(3, TOTAL_STEPS, 'GitHub Access')
 
-        ui.info('Probing SSH access to github.com...')
-        if git.ssh_works():
+        ui.info('Probing SSH access to github.com with the deploy key...')
+        if git.ssh_works(key=cfg.SSH_KEY):
             self.protocol = 'ssh'
-            ui.ok('SSH access to GitHub works')
+            ui.ok('SSH access to GitHub works (deploy key)')
         else:
-            ui.info('SSH did not authenticate. Checking for HTTPS credentials...')
+            ui.info('Deploy key not set up yet. Checking for HTTPS credentials...')
             if git.https_works():
                 self.protocol = 'https'
                 ui.ok('HTTPS credentials found — will use HTTPS')
             else:
-                ui.warn('Neither SSH nor HTTPS credentials are working yet.')
+                ui.warn('Neither the deploy key nor HTTPS credentials are working yet.')
                 if not self._setup_ssh_key():
                     return False
-                if not git.ssh_works():
+                if not git.ssh_works(key=cfg.SSH_KEY):
                     ui.err('Still cannot authenticate to GitHub.')
                     ui.info('Add an SSH key at https://github.com/settings/ssh/new')
                     ui.info('or authenticate over HTTPS with: gh auth login')
                     return False
                 self.protocol = 'ssh'
-                ui.ok('SSH access to GitHub works')
+                ui.ok('SSH access to GitHub works (deploy key)')
 
         # Access must be verified, not assumed: enterprise is private, and a
         # silent failure here is what makes the tool look broken much later.
@@ -149,26 +149,26 @@ class Setup:
         return True
 
     def _setup_ssh_key(self):
-        key = os.path.join(cfg.HOME, '.ssh', 'id_ed25519')
+        """Generates a dedicated deploy key for this tool, separate from the
+        user's personal key — see the note on git.env() for why."""
+        key = cfg.SSH_KEY
         if not os.path.exists(key):
-            if not ui.confirm(f'Generate a new SSH key at {key}?'):
+            if not ui.confirm(f'Generate a dedicated deploy key at {key}?'):
                 return False
             email = ui.ask('GitHub email for the key comment',
                            f'{self.db_user}@{os.uname().nodename}')
             os.makedirs(os.path.dirname(key), mode=0o700, exist_ok=True)
             result = proc.run(['ssh-keygen', '-t', 'ed25519', '-f', key, '-N', '',
-                               '-C', email], timeout=120)
+                               '-C', f'{cfg.APP_NAME}@{email}'], timeout=120)
             if not result.ok:
                 ui.err(f'ssh-keygen failed: {result.stderr}')
                 return False
-            ui.ok('SSH key generated')
+            ui.ok('Deploy key generated')
 
-        for pub in sorted(glob.glob(os.path.join(cfg.HOME, '.ssh', '*.pub'))):
-            print()
-            ui.info(f'Public key ({pub}):')
-            with open(pub) as fh:
-                print(fh.read().strip())
-            break
+        print()
+        ui.info(f'Public key ({key}.pub):')
+        with open(f'{key}.pub') as fh:
+            print(fh.read().strip())
 
         if not ui.interactive():
             ui.warn('Non-interactive: add the key above to GitHub, then re-run setup.')

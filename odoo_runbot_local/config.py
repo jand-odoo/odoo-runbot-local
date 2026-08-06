@@ -24,6 +24,12 @@ RUNNING_FILE = os.path.join(APP_DIR, 'running.json')
 LOCK_FILE = os.path.join(APP_DIR, 'checkout.lock')
 EXTENSION_DIR = os.path.join(APP_DIR, 'extension')
 
+# Dedicated, passphrase-less key for this tool's own git operations. Kept
+# separate from the user's personal key so the background service — which
+# runs unattended and cannot unlock a passphrase or reach a login-session
+# ssh-agent — never depends on either.
+SSH_KEY = os.path.join(APP_DIR, 'ssh', 'id_ed25519')
+
 UNIT_FILE = os.path.join(HOME, '.config', 'systemd', 'user', APP_NAME + '.service')
 DESKTOP_FILE = os.path.join(HOME, '.local', 'share', 'applications', APP_NAME + '.desktop')
 

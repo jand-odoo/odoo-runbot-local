@@ -99,6 +99,19 @@ def _check_config(report, conf, problems):
         report.ok(f'repo_path = {repo}  (this tool)')
 
 
+def _check_ssh_key(report):
+    ui.heading('SSH deploy key')
+    if not os.path.exists(cfg.SSH_KEY):
+        report.note(f'no deploy key at {cfg.SSH_KEY} (fine if using HTTPS)')
+        return
+    report.ok(f'deploy key present at {cfg.SSH_KEY}')
+    if git.ssh_works(key=cfg.SSH_KEY):
+        report.ok('deploy key authenticates with GitHub')
+    else:
+        report.fail('deploy key does not authenticate — add it at '
+                    'https://github.com/settings/ssh/new or re-run setup')
+
+
 def _check_repos(report, conf, deep=True):
     ui.heading('Repositories')
     for repo in cfg.REPOS:
@@ -239,6 +252,7 @@ def run(args):
     _check_tools(report)
     _check_postgres(report, conf)
     _check_config(report, conf, problems)
+    _check_ssh_key(report)
     _check_repos(report, conf, deep=not args.offline)
     _check_ports(report, conf)
     _check_service(report, conf)

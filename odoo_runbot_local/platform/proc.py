@@ -18,9 +18,15 @@ class Result:
         return self.ok
 
     @property
-    def last_error_line(self):
-        lines = [line for line in self.stderr.splitlines() if line.strip()]
-        return lines[-1] if lines else ''
+    def error_summary(self):
+        """stderr with blank lines dropped, for compact error messages.
+
+        Git puts the actual reason first ("Permission denied", "fatal: ...")
+        and pads the rest with advice on following lines — keeping only the
+        last line discards exactly the part that says what went wrong.
+        """
+        lines = [line.strip() for line in self.stderr.splitlines() if line.strip()]
+        return ' '.join(lines)
 
 
 def run(cmd, timeout=60, cwd=None, env=None, stdin=None):
