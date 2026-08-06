@@ -113,15 +113,15 @@ def fetch_commit(repo, commit):
     for remote in remotes(repo):
         # Fetching a bare sha needs no refspec: objects stay reachable through
         # FETCH_HEAD, so nothing is written into the shared ref namespace.
+        # No fallback to a refspec-less `fetch <remote>` here — GitHub reliably
+        # serves a reachable sha directly, and that fallback means "every
+        # branch on this remote", which for odoo-dev is thousands of branches
+        # and turns a missing commit into a multi-minute download for nothing.
         result = git(repo, 'fetch', '--no-tags', remote, commit)
         if result.ok and has_commit(repo, commit):
             return True, ''
         if result.stderr:
             errors.append(f'{remote}: {result.error_summary}')
-
-        result = git(repo, 'fetch', '--no-tags', remote)
-        if result.ok and has_commit(repo, commit):
-            return True, ''
 
     if git(repo, 'rev-parse', '--is-shallow-repository', timeout=30).stdout == 'true':
         git(repo, 'fetch', '--unshallow')
